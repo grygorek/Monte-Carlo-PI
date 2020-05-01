@@ -53,28 +53,145 @@
 //
 // Finally, estimated PI = 4 * ratio
 
-int main() {
+auto pi_area_method()
+{
   std::random_device rnd_dev;
   std::mt19937 gen(rnd_dev());
-  std::uniform_real_distribution<double> rnd;
+  std::uniform_real_distribution<double> rnd(0, std::nextafter(1.f, 2.f));
 
-  auto calculate = [&gen, &rnd](int nloops) {
+  auto area_method = [&gen, &rnd](int nloops) {
     int inside{};
-    while (nloops--) {
+    while (nloops--)
+    {
       auto point = std::complex<double>{rnd(gen), rnd(gen)};
-      if (std::abs(point) <= 1.0) inside++;
+      if (std::abs(point) <= 1.0)
+        inside++;
     }
     return inside;
   };
 
   constexpr int n = 10;
-  constexpr int all_points = 5'000'000;
+  constexpr int all_points = 10'000;
 
   std::vector<std::future<int>> tasks(n);
-  for (auto& t : tasks) t = std::async(calculate, all_points / n);
+  for (auto& t : tasks)
+    t = std::async(area_method, all_points / n);
 
-  int inside = std::accumulate(std::begin(tasks), std::end(tasks), 0,
-                               [](auto acc, auto& i) { return acc + i.get(); });
+  int inside = std::accumulate(
+      std::begin(tasks), std::end(tasks), 0, [](auto acc, auto& i) {
+        return acc + i.get();
+      });
 
-  std::cout << "Estimated PI: " << 4.0 * inside / all_points << "\n";
+  return 4. * inside / all_points;
+}
+
+auto pi_avg_method()
+{
+  std::random_device rnd_dev;
+  std::mt19937 gen(rnd_dev());
+  std::uniform_real_distribution<double> rnd(0, std::nextafter(1.f, 2.f));
+
+  auto avg_method = [&gen, &rnd](int nloops) {
+    double y{};
+    while (nloops--)
+    {
+      auto x = rnd(gen);
+      y += sqrt(1 - x * x);
+    }
+    return y;
+  };
+
+  constexpr int n = 10;
+  constexpr int all_points = 10'000;
+
+  std::vector<std::future<double>> tasks(n);
+  for (auto& t : tasks)
+    t = std::async(avg_method, all_points / n);
+
+  auto y = std::accumulate(
+      std::begin(tasks), std::end(tasks), 0., [](auto acc, auto& i) {
+        return acc + i.get();
+      });
+
+  return 4. * y / all_points;
+}
+
+template <class T, class Type>
+void histogram(const T& dta, Type min, Type max, int bins_cnt, int scale = 1)
+{
+  // For each value find the correct bin and increment its count.
+
+  std::vector<int> bins(bins_cnt);
+  const auto step = (max - min) / bins_cnt;
+  for (auto v : dta)
+  {
+    for (auto bin = 0; bin < bins_cnt; bin++)
+    {
+      auto mn = min + step * bin;
+      auto mx = min + step * (bin + 1LL);
+      if (v >= mn && v < mx)
+      {
+        ++bins[bin];
+        break;
+      }
+    }
+  }
+
+  // print min/max of the histogram (left and right edge)
+  std::cout << "min: " << min << ", max: " << max << '\n';
+  // for each bin print a bar as long as the bin's value
+  for (int bin = 0; bin < bins_cnt; bin++)
+    std::cout << bin << ": " << std::string(bins[bin] / scale, '*') << '\n';
+}
+
+template <class F>
+void do_statistics_pi(F&& f)
+{
+  // generate pi N times
+  std::vector<double> pi_est(500);
+
+  double sum2{};  // sum of squares (needed for std error)
+  double sum{};
+  for (auto& pi : pi_est)
+  {
+    pi = f();
+    sum += pi;
+    sum2 += pi * pi;
+  }
+
+  // To speed up the variation calculation (= std error) we can use a property
+  // that variation is a difference between a avg of squered samples and a
+  // squered sum of means var = SUM( sum^2 ) - SUM( mean )^2
+
+  sum2 = sum2 / pi_est.size();  // avg of squared samples
+  double u = sum / pi_est.size();  // mean
+  double var = sum2 - u * u;  // avg of sqr smpls - mean^2
+  double std_err = sqrt(var);
+
+  // This is a slow version of variation (loop around samples again is needed).
+  // Doing this for comparison as a proof there is no difference.
+  double v{};
+  for (auto pi : pi_est)
+  {
+    auto t = pi - u;
+    v += t * t;
+  }
+  v /= pi_est.size();
+  auto std_err2 = sqrt(v);
+
+  std::cout << "Estimated PI: " << u << ", std err(fast): " << std_err
+            << ", std err2(slow): " << std_err2 << "\n";
+
+  // print a histogram
+  const auto [min, max] = std::minmax_element(pi_est.begin(), pi_est.end());
+  histogram(pi_est, *min, *max, 10, 5);
+}
+
+int main()
+{
+  std::cout << "Area Method:\n";
+  do_statistics_pi(pi_area_method);
+
+  std::cout << "Average Method:\n";
+  do_statistics_pi(pi_avg_method);
 }
