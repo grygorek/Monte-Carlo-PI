@@ -37,6 +37,13 @@
 // 3. Using Monte Carlo method to estimate the ratio between circle and square
 // areas
 //
+// This example implements two methods of estimating PI.
+//  - estimating an area of the circle
+//  - averaging value of a circle function
+
+
+// Area Method
+// 
 // Say, the radious of the circle is 1.0. Consequently, the square is 1x1. Let's
 // generate random points on the surface of that square. Some of them will also
 // overlap with the surface of the quarter of the circle and the others will
@@ -52,7 +59,6 @@
 // ratio = CircArea4 / square_area
 //
 // Finally, estimated PI = 4 * ratio
-
 auto pi_area_method()
 {
   std::random_device rnd_dev;
@@ -73,6 +79,7 @@ auto pi_area_method()
   constexpr int n = 10;
   constexpr int all_points = 10'000;
 
+  // just for fun spin few threads
   std::vector<std::future<int>> tasks(n);
   for (auto& t : tasks)
     t = std::async(area_method, all_points / n);
@@ -85,6 +92,17 @@ auto pi_area_method()
   return 4. * inside / all_points;
 }
 
+// Averaging value of a circle function method
+//
+// The circle function is r^2 = x^2 + y^2. If radius r is 1 then:
+//   y = sqrt(1 - x^2)
+//
+// The integral of that function is Pi/4.
+//  Favg = 1/(b-a) * SUM[i=a..b](sqrt(1 - Xi^2))
+// In our case a=0 and b=1 so:
+//  Favg = SUM[i=0..1](sqrt(1 = Xi^2))
+// In other words,
+// generate lots of random x, sum up all y and divide by number of samples.
 auto pi_avg_method()
 {
   std::random_device rnd_dev;
@@ -104,6 +122,7 @@ auto pi_avg_method()
   constexpr int n = 10;
   constexpr int all_points = 10'000;
 
+  // Just for fun, run concurently.
   std::vector<std::future<double>> tasks(n);
   for (auto& t : tasks)
     t = std::async(avg_method, all_points / n);
@@ -139,7 +158,9 @@ void histogram(const T& dta, Type min, Type max, int bins_cnt, int scale = 1)
 
   // print min/max of the histogram (left and right edge)
   std::cout << "min: " << min << ", max: " << max << '\n';
+  
   // for each bin print a bar as long as the bin's value
+  // (use scale argument if line in the console is broken)
   for (int bin = 0; bin < bins_cnt; bin++)
     std::cout << bin << ": " << std::string(bins[bin] / scale, '*') << '\n';
 }
@@ -147,7 +168,9 @@ void histogram(const T& dta, Type min, Type max, int bins_cnt, int scale = 1)
 template <class F>
 void do_statistics_pi(F&& f)
 {
-  // generate pi N times
+  // Generate PI N times and print mean value, standard error
+  // and histogram.
+    
   std::vector<double> pi_est(500);
 
   double sum2{};  // sum of squares (needed for std error)
@@ -192,6 +215,6 @@ int main()
   std::cout << "Area Method:\n";
   do_statistics_pi(pi_area_method);
 
-  std::cout << "Average Method:\n";
+  std::cout << "\nAverage Method:\n";
   do_statistics_pi(pi_avg_method);
 }
